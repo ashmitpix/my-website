@@ -1409,36 +1409,43 @@
     jadenTheme:  { id: '7fxCnTme5uk', title: "Jaden_MAN's Theme",  artist: 'Kyon',          start: 0  }
   };
   var currentTrack = 'blueBossa';
-  var ytPlayer, ytReady = false, ytPlaying = false, ytMuted = false;
-  var _playOnReady = false;
+  var ytPlayer, ytApiReady = false, ytReady = false, ytPlaying = false, ytMuted = false;
+  var _createOnApiReady = false;
 
+  /* API loaded — do NOT create the player yet; wait for the user's click */
   window.onYouTubeIframeAPIReady = function () {
+    ytApiReady = true;
+    if (_createOnApiReady) createPlayer();
+  };
+
+  function createPlayer() {
+    var t = tracks[currentTrack];
     ytPlayer = new YT.Player('yt-player', {
-      videoId: tracks[currentTrack].id,
-      playerVars: { autoplay: 0, controls: 0, loop: 1, playlist: tracks[currentTrack].id, playsinline: 1, start: tracks[currentTrack].start },
+      videoId: t.id,
+      playerVars: {
+        autoplay: 1, controls: 0, loop: 1, playlist: t.id,
+        playsinline: 1, start: t.start, origin: location.origin
+      },
       events: {
         onReady: function (e) {
           ytReady = true;
           e.target.setVolume(70);
-          if (_playOnReady) e.target.playVideo();
+          e.target.playVideo();
         },
         onStateChange: function (e) {
           ytPlaying = e.data === YT.PlayerState.PLAYING;
           syncUI();
         },
         onError: function (e) {
-          /* 150 = embedding blocked by video owner */
           const sub = document.querySelector('.mp-sub');
-          sub.textContent = e.data === 150 || e.data === 101
-            ? 'Embedding blocked — try another video'
-            : 'Playback error (code ' + e.data + ')';
+          sub.textContent = 'Playback error (code ' + e.data + ')';
           document.querySelectorAll('.waveform').forEach(w => w.classList.add('paused'));
           document.getElementById('mp-play').textContent = '▶';
           ytPlaying = false;
         }
       }
     });
-  };
+  }
 
   function syncUI() {
     document.querySelectorAll('.waveform').forEach(w => w.classList.toggle('paused', !ytPlaying));
@@ -1450,11 +1457,11 @@
     const overlay = document.getElementById('entry-overlay');
     overlay.classList.add('fade-out');
     setTimeout(() => overlay.remove(), 900);
-    if (ytReady) {
-      ytPlayer.setVolume(70);
-      ytPlayer.playVideo();
+    /* Player created inside user gesture so browser grants autoplay */
+    if (ytApiReady) {
+      createPlayer();
     } else {
-      _playOnReady = true;
+      _createOnApiReady = true;
     }
   });
 
