@@ -910,9 +910,10 @@
   <div id="progress-bar"></div>
   <div id="cursor-glow"></div>
 
-  <!-- HIDDEN YOUTUBE PLAYER -->
-  <div style="position:fixed;bottom:0;right:0;width:200px;height:113px;visibility:hidden;pointer-events:none;">
-    <div id="yt-player"></div>
+  <!-- HIDDEN SOUNDCLOUD PLAYER -->
+  <div style="position:fixed;bottom:0;right:0;width:1px;height:1px;overflow:hidden;pointer-events:none;">
+    <iframe id="sc-player" width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay"
+      src="https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/joe-henderson-official/blue-bossa-rudy-van-gelder&auto_play=false&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false"></iframe>
   </div>
 
   <!-- MUSIC WIDGET -->
@@ -1379,7 +1380,7 @@
   })();
   </script>
 
-  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="https://w.soundcloud.com/player/api.js"></script>
   <script>
   /* ── WIDGET: SHOW ON SCROLL ── */
   const widget = document.getElementById('music-widget');
@@ -1403,53 +1404,43 @@
   }
   setTimeout(setupMarquee, 300);
 
-  /* ── YOUTUBE BACKGROUND PLAYER ── */
+  /* ── SOUNDCLOUD BACKGROUND PLAYER ── */
   var tracks = {
-    blueBossa:   { id: 'EUxv3AAaK_Y', title: 'Blue Bossa',         artist: 'Joe Henderson', start: 19 },
-    jadenTheme:  { id: '7fxCnTme5uk', title: "Jaden_MAN's Theme",  artist: 'Kyon',          start: 0  }
+    blueBossa:  { url: 'https://soundcloud.com/joe-henderson-official/blue-bossa-rudy-van-gelder', title: 'Blue Bossa',        artist: 'Joe Henderson', start: 19000 },
+    jadenTheme: { url: 'https://soundcloud.com/user-425031717/kyon-sorcery-ring',                  title: "Jaden_MAN's Theme", artist: 'Kyon',          start: 0     }
   };
   var currentTrack = 'blueBossa';
-  var ytPlayer, ytApiReady = false, ytReady = false, ytPlaying = false, ytMuted = false;
-  var _createOnApiReady = false;
+  var scWidget, scReady = false, scPlaying = false, scMuted = false;
+  var _playOnScReady = false, _pendingSeekMs = 0;
 
-  /* API loaded — do NOT create the player yet; wait for the user's click */
-  window.onYouTubeIframeAPIReady = function () {
-    ytApiReady = true;
-    if (_createOnApiReady) createPlayer();
-  };
-
-  function createPlayer() {
-    var t = tracks[currentTrack];
-    ytPlayer = new YT.Player('yt-player', {
-      videoId: t.id,
-      playerVars: {
-        autoplay: 1, controls: 0, loop: 1, playlist: t.id,
-        playsinline: 1, start: t.start, origin: location.origin
-      },
-      events: {
-        onReady: function (e) {
-          ytReady = true;
-          e.target.setVolume(70);
-          e.target.playVideo();
-        },
-        onStateChange: function (e) {
-          ytPlaying = e.data === YT.PlayerState.PLAYING;
-          syncUI();
-        },
-        onError: function (e) {
-          const sub = document.querySelector('.mp-sub');
-          sub.textContent = 'Playback error (code ' + e.data + ')';
-          document.querySelectorAll('.waveform').forEach(w => w.classList.add('paused'));
-          document.getElementById('mp-play').textContent = '▶';
-          ytPlaying = false;
-        }
+  window.addEventListener('load', function () {
+    scWidget = SC.Widget(document.getElementById('sc-player'));
+    scWidget.bind(SC.Widget.Events.READY, function () {
+      scReady = true;
+      scWidget.setVolume(70);
+      if (_playOnScReady) startPlayback();
+    });
+    scWidget.bind(SC.Widget.Events.PLAY, function () {
+      scPlaying = true;
+      syncUI();
+      if (_pendingSeekMs > 0) {
+        var ms = _pendingSeekMs;
+        _pendingSeekMs = 0;
+        setTimeout(function () { scWidget.seekTo(ms); }, 200);
       }
     });
+    scWidget.bind(SC.Widget.Events.PAUSE, function () { scPlaying = false; syncUI(); });
+    scWidget.bind(SC.Widget.Events.FINISH, function () { scPlaying = false; syncUI(); });
+  });
+
+  function startPlayback() {
+    _pendingSeekMs = tracks[currentTrack].start;
+    scWidget.play();
   }
 
   function syncUI() {
-    document.querySelectorAll('.waveform').forEach(w => w.classList.toggle('paused', !ytPlaying));
-    document.getElementById('mp-play').textContent = ytPlaying ? '⏸' : '▶';
+    document.querySelectorAll('.waveform').forEach(w => w.classList.toggle('paused', !scPlaying));
+    document.getElementById('mp-play').textContent = scPlaying ? '⏸' : '▶';
   }
 
   /* ── ENTRY BUTTON ── */
@@ -1457,12 +1448,7 @@
     const overlay = document.getElementById('entry-overlay');
     overlay.classList.add('fade-out');
     setTimeout(() => overlay.remove(), 900);
-    /* Player created inside user gesture so browser grants autoplay */
-    if (ytApiReady) {
-      createPlayer();
-    } else {
-      _createOnApiReady = true;
-    }
+    if (scReady) { startPlayback(); } else { _playOnScReady = true; }
   });
 
   function switchTrack(key) {
@@ -1471,9 +1457,9 @@
     document.getElementById('mp-title-text').textContent = t.title;
     document.querySelector('.mp-sub').textContent = t.artist;
     document.querySelectorAll('.track-btn').forEach(b => b.classList.toggle('active', b.dataset.track === key));
-    if (ytReady) {
-      ytPlayer.loadVideoById({ videoId: t.id, startSeconds: t.start, suggestedQuality: 'small' });
-      ytPlayer.setVolume(70);
+    if (scReady) {
+      _pendingSeekMs = t.start;
+      scWidget.load(t.url, { auto_play: true });
     }
   }
 
@@ -1482,15 +1468,15 @@
   });
 
   document.getElementById('mp-play').addEventListener('click', () => {
-    if (!ytReady) return;
-    ytPlaying ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
+    if (!scReady) return;
+    scPlaying ? scWidget.pause() : scWidget.play();
   });
 
   document.getElementById('mp-mute').addEventListener('click', () => {
-    if (!ytReady) return;
-    ytMuted = !ytMuted;
-    ytMuted ? ytPlayer.mute() : ytPlayer.unMute();
-    document.getElementById('mp-mute').textContent = ytMuted ? '🔇' : '🔊';
+    if (!scReady) return;
+    scMuted = !scMuted;
+    scWidget.setVolume(scMuted ? 0 : 70);
+    document.getElementById('mp-mute').textContent = scMuted ? '🔇' : '🔊';
   });
   </script>
 </body>
