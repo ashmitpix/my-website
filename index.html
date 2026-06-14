@@ -1411,14 +1411,13 @@
   };
   var currentTrack = 'blueBossa';
   var scWidget, scReady = false, scPlaying = false, scMuted = false;
-  var _playOnScReady = false, _pendingSeekMs = 0;
+  var _pendingSeekMs = 0;
 
   window.addEventListener('load', function () {
     scWidget = SC.Widget(document.getElementById('sc-player'));
     scWidget.bind(SC.Widget.Events.READY, function () {
       scReady = true;
       scWidget.setVolume(70);
-      if (_playOnScReady) startPlayback();
     });
     scWidget.bind(SC.Widget.Events.PLAY, function () {
       scPlaying = true;
@@ -1433,11 +1432,6 @@
     scWidget.bind(SC.Widget.Events.FINISH, function () { scPlaying = false; syncUI(); });
   });
 
-  function startPlayback() {
-    _pendingSeekMs = tracks[currentTrack].start;
-    scWidget.play();
-  }
-
   function syncUI() {
     document.querySelectorAll('.waveform').forEach(w => w.classList.toggle('paused', !scPlaying));
     document.getElementById('mp-play').textContent = scPlaying ? '⏸' : '▶';
@@ -1448,7 +1442,8 @@
     const overlay = document.getElementById('entry-overlay');
     overlay.classList.add('fade-out');
     setTimeout(() => overlay.remove(), 900);
-    if (scReady) { startPlayback(); } else { _playOnScReady = true; }
+    _pendingSeekMs = tracks[currentTrack].start;
+    scWidget.load(tracks[currentTrack].url, { auto_play: true });
   });
 
   function switchTrack(key) {
