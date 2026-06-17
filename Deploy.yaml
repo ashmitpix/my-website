@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  labels:
+    app: webiste
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: website
+  template:
+    metadata:
+      labels:
+        app: website
+    spec:
+      containers:
+      - name: website
+        image: localhost:5001/myportfolio:1.0.0
+        ports:
+        - containerPort: 80
+      - name: website2
+        image: localhost:5001/myportfolio:1.0.0
+        ports:
+        - containerPort: 80
